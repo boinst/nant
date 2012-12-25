@@ -127,10 +127,6 @@
       <Project>{6B2EC648-8D69-4096-B4F9-6EDC0B2F98EF}</Project>
       <Name>NAnt.SourceControl</Name>
     </ProjectReference>
-    <ProjectReference Include="..\..\tests\NAnt.Tests.csproj">
-      <Project>{F77EA08E-9473-436A-BBA3-880139A341B1}</Project>
-      <Name>NAnt.Tests</Name>
-    </ProjectReference>
     <ProjectReference Include="..\NAnt.VisualCpp\NAnt.VisualCpp.csproj">
       <Project>{A154DB17-7263-44E3-838E-1E4C4946B7D8}</Project>
       <Name>NAnt.VisualCpp</Name>

@@ -29,9 +29,21 @@ using NAnt.Core.Attributes;
 using NAnt.Core.Util;
 
 namespace NAnt.Core {
+    using System.Collections.Generic;
+
     [Serializable()]
     public sealed class Target : Element, ICloneable {
         #region Private Instance Fields
+
+        /// <summary>
+        /// Cached log events that will be logged when the Target finishes executing.
+        /// </summary>
+        /// <remarks>
+        /// Added for Parallel NAnt.
+        /// Appended to by <see cref="IParent.Log"/>.
+        /// Flushed by <see cref="FlushLog"/>.
+        /// </remarks>
+        private readonly List<BuildEventArgs> logEvents = new List<BuildEventArgs>();
 
         private string _name;
         private string _description;
@@ -233,7 +245,6 @@ namespace NAnt.Core {
         public void Execute() {
             if (IfDefined && !UnlessDefined) {
                 try {
-                    Project.OnTargetStarted(this, new BuildEventArgs(this));
                 
                     // select all the task nodes and execute them
                     foreach (XmlNode childNode in XmlNode) {
@@ -248,7 +259,7 @@ namespace NAnt.Core {
                             }
                         } else if (TypeFactory.DataTypeBuilders.Contains(childNode.Name)) {
                             DataTypeBase dataType = Project.CreateDataTypeBase(childNode);
-                            Project.Log(Level.Verbose, "Adding a {0} reference with id '{1}'.", 
+                            this.Log(Level.Verbose, "Adding a {0} reference with id '{1}'.", 
                                 childNode.Name, dataType.ID);
                             if (!Project.DataTypeReferences.Contains(dataType.ID)) {
                                 Project.DataTypeReferences.Add(dataType.ID, dataType);
@@ -263,8 +274,39 @@ namespace NAnt.Core {
                     }
                 } finally {
                     _executed = true;
-                    Project.OnTargetFinished(this, new BuildEventArgs(this));
+                    Project.OnTargetASyncComplete(this, new BuildEventArgs(this));
                 }
+            }
+        }
+        
+        public override void Log(Level level, string message)
+        {
+            // NAnt vanilla expects events logged by a Target to be constructed 
+            // with the Project, not the Target.
+            Log(new BuildEventArgs(this.Project) { MessageLevel = level, Message = message });
+        }
+
+        public override void Log(Level level, string message, params object[] args)
+        {
+            this.Log(level, string.Format(message, args));
+        }
+
+        /// <summary>
+        /// Log a build event.
+        /// </summary>
+        public override void Log(BuildEventArgs buildEvent)
+        {
+            logEvents.Add(buildEvent);
+        }
+
+        /// <summary>
+        /// Log all cached events.
+        /// </summary>
+        public void FlushLog()
+        {
+            foreach (var info in logEvents)
+            {
+                Parent.Log(info);
             }
         }
 

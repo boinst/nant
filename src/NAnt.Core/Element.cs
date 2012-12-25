@@ -47,14 +47,14 @@ namespace NAnt.Core {
     /// </para>
     /// </remarks>
     [Serializable()]
-    public abstract class Element {
+    public abstract class Element : IParent {
         #region Private Instance Fields
 
         private Location _location = Location.UnknownLocation;
         private Project _project;
         [NonSerialized()]
         private XmlNode _xmlNode;
-        private object _parent;
+        private IParent _parent;
         [NonSerialized()]
         private XmlNamespaceManager _nsMgr;
 
@@ -100,7 +100,7 @@ namespace NAnt.Core {
         /// This will be the parent <see cref="Task" />, <see cref="Target" />, or 
         /// <see cref="Project" /> depending on where the element is defined.
         /// </remarks>
-        public object Parent {
+        public IParent Parent {
             get { return _parent; } 
             set { _parent = value; } 
         }
@@ -1744,6 +1744,15 @@ namespace NAnt.Core {
             private interface IAttributeSetter {
                 void Set(XmlNode attributeNode, Element parent, PropertyInfo property, string value);
             }
+        }
+
+        /// <summary>
+        /// Log a build event.
+        /// </summary>
+        public virtual void Log(BuildEventArgs buildEvent)
+        {
+            if (Parent == null) throw new Exception("BOOM!");
+            this.Parent.Log(buildEvent);
         }
     }
 }

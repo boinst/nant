@@ -1,0 +1,64 @@
+<?xml version="1.0"?>
+<project name="MyTest" default="build">
+    <target name="build" depends="target1, target2, target3, target4, target5, target6">
+		<echo message="This is the Default Target executing on Thread ${scripts::get-current-thread-id()}" />
+    </target>
+    <target name="target1" depends="target3">
+		<echo message="This is Target 1 executing on Thread ${scripts::get-current-thread-id()}" />
+    </target>
+    <target name="target2" depends="target3">
+		<echo message="This is Target 2 executing on Thread ${scripts::get-current-thread-id()}" />
+    </target>
+    <target name="target3" >
+		<echo message="This is Target 3 executing on Thread ${scripts::get-current-thread-id()}" />
+    </target>
+    <target name="target4" >
+		<echo message="This is Target 4 executing on Thread ${scripts::get-current-thread-id()}" />
+    </target>
+    <target name="target5" >
+		<echo message="This is Target 5 executing on Thread ${scripts::get-current-thread-id()}" />
+		<echo message="Forking asynchronous tasks" />
+		<async taskname="taskA">
+			<echo message="ASync Task A" />
+		</async>
+		<async taskname="taskB">
+			<echo message="ASync Task B" />
+		</async>
+		<async taskname="taskC">
+			<echo message="ASync Task C" />
+		</async>
+		<async taskname="taskD">
+			<echo message="ASync Task D" />
+		</async>
+		<echo message="Joining forked tasks A and B" />
+		<join task="taskA, taskB" />
+		<echo message="Joining all tasks" />
+		<join all="true" />
+		<echo message="Joining all tasks (for the second time)" />
+		<join all="true" />
+    </target>
+    <target name="target6" depends="target7" >
+		<echo message="This is Target 6 executing on Thread ${scripts::get-current-thread-id()}" />
+		<fail if="${not property::exists('testProperty')}" />
+    </target>
+    <target name="target7" >
+		<echo message="This is Target 7 executing on Thread ${scripts::get-current-thread-id()}" />
+		<property name="testProperty" value="1234567890" />
+    </target>
+	
+    <script language="C#" prefix="scripts">
+        <references>              
+            <include name="System.dll" />
+        </references>
+        <code>
+        <![CDATA[
+            // Get the ID of the current thread
+            [Function("get-current-thread-id")]
+            public static int GetCurrentThreadId()
+            {
+				return System.Threading.Thread.CurrentThread.ManagedThreadId;
+            }
+        ]]>
+        </code>
+    </script>
+</project>

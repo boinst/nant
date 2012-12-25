@@ -37,6 +37,9 @@ using NAnt.Core.Tasks;
 using NAnt.Core.Util;
 
 namespace NAnt.Core {
+    using System.Collections.Generic;
+    using System.Threading;
+
     /// <summary>
     /// Central representation of a NAnt project.
     /// </summary>
@@ -65,7 +68,7 @@ namespace NAnt.Core {
     ///   </code>
     /// </example>
     [Serializable()]
-    public class Project {
+    public class Project : IParent {
         #region Private Static Fields
 
         /// <summary>
@@ -879,7 +882,10 @@ namespace NAnt.Core {
         /// <param name="e">A <see cref="BuildEventArgs" /> that contains the event data.</param>
         public void OnMessageLogged(BuildEventArgs e) {
             if (MessageLogged != null) {
-                MessageLogged(this, e);
+                lock (syncObject)
+                {
+                    MessageLogged(this, e);
+                }
             }
         }
 
@@ -978,10 +984,7 @@ namespace NAnt.Core {
                 //It just means we have all global tasks. -- skot
                 //throw new BuildException("No Target Specified");
             } else {
-                foreach (string targetName in BuildTargets) {
-                    //do not force dependencies of build targets.
-                    Execute(targetName, false);
-                }
+                this.BuildTheseTargetsASync(this.BuildTargets);
             }
         }
 
@@ -1740,6 +1743,133 @@ namespace NAnt.Core {
             } while (!c.Equals(end));
 
             return new BuildException(sb.ToString());
+        }
+
+
+        private List<Target> pendingTargets = new List<Target>();
+        private List<Target> executingTargets = new List<Target>();
+        private List<Target> completedTargets = new List<Target>();
+        private object syncObject = new object();
+
+        public void Log(BuildEventArgs buildEvent)
+        {
+            this.OnMessageLogged(buildEvent);
+        }
+
+        private void BuildTheseTargetsASync(StringCollection buildTargets)
+        {
+            if (buildTargets.Count == 0) return;
+
+            foreach (string targetName in this.BuildTargets)
+            {
+                TargetCollection sortedTargets = TopologicalTargetSort(targetName, Targets);
+
+                foreach (Target target in sortedTargets)
+                {
+                    if (!pendingTargets.Contains(target))
+                        pendingTargets.Add(target);
+                }
+            }
+
+            this.StartAnyTargetsWithSatisfiedDependencies();
+
+            WaitUntilAllTargetsFinished();
+        }
+
+
+        /// <summary>
+        /// Spin until all targets have finished executing.
+        /// </summary>
+        private void WaitUntilAllTargetsFinished()
+        {
+            while (!this.AreAllTargetsFinished())
+            {
+                Thread.Sleep(500);
+            }
+        }
+
+        /// <summary>
+        /// All targets have finished executing.
+        /// </summary>
+        /// <returns></returns>
+        private bool AreAllTargetsFinished()
+        {
+            lock (syncObject)
+            {
+                return pendingTargets.Count == 0 && executingTargets.Count == 0;
+            }
+        }
+
+        public void OnTargetASyncComplete(object sender, BuildEventArgs e)
+        {
+            lock (syncObject)
+            {
+                Target target = e.Target;
+                this.OnTargetStarted(target, new BuildEventArgs(target));
+                target.FlushLog();
+                this.OnTargetFinished(target, new BuildEventArgs(target));
+
+                executingTargets.Remove(target);
+                completedTargets.Add(target);
+                this.StartAnyTargetsWithSatisfiedDependencies();
+            }
+        }
+
+        /// <summary>
+        /// Get a list of all targets that are ready to be executed
+        /// because all of their dependencies have finished executing.
+        /// </summary>
+        /// <returns>
+        /// </returns>
+        private List<Target> PendingTargetsWithSatisfiedDependencies()
+        {
+            lock (syncObject)
+            {
+                List<Target> startedTargets = new List<Target>();
+                foreach (var target in pendingTargets)
+                {
+                    if (this.AllDependenciesHaveBeenExecutedForTarget(target)
+                        && pendingTargets.Contains(target))
+                    {
+                        startedTargets.Add(target);
+                    }
+                }
+
+                return startedTargets;
+            }
+        }
+
+        /// <summary>
+        /// Start any targets that are ready to go.
+        /// </summary>
+        private void StartAnyTargetsWithSatisfiedDependencies()
+        {
+            lock (syncObject)
+            {
+                foreach (var target in this.PendingTargetsWithSatisfiedDependencies())
+                {
+                    Target targetToExecute = target;
+                    ThreadPool.QueueUserWorkItem((a) => targetToExecute.Execute());
+                    pendingTargets.Remove(target);
+                    executingTargets.Add(target);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Have all of its dependencies been executed?
+        /// </summary>
+        /// <param name="target"></param>
+        /// <returns></returns>
+        private bool AllDependenciesHaveBeenExecutedForTarget(Target target)
+        {
+            foreach (var dependencyName in target.Dependencies)
+            {
+                Target dependency = Targets.Find(dependencyName);
+                if (!dependency.Executed) return false;
+            }
+
+            return true;
         }
     }
 

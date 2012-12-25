@@ -250,9 +250,9 @@ namespace NAnt.Core {
             }
 
             if (_verbose && messageLevel == Level.Verbose && Project.Threshold == Level.Info) {
-                Project.Log(this, Level.Info, message);
+                this.Log(new BuildEventArgs(this) { MessageLevel = Level.Info, Message = message });
             } else {
-                Project.Log(this, messageLevel, message);
+                this.Log(new BuildEventArgs(this) { MessageLevel = messageLevel, Message = message });
             }
         }
 

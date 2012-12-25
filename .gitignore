@@ -56,3 +56,5 @@ test-results/
 *.dat
 *.orig
 *.rej
+
+/nant.log
